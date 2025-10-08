@@ -1,0 +1,215 @@
+import time
+import random
+import matplotlib.pyplot as plt
+import numpy as np
+
+def insertion_sort(arr):
+    """
+    Insertion sort implementation.
+    Time complexity: O(n^2)
+    """
+    for i in range(1, len(arr)):
+        key = arr[i]
+        j = i - 1
+        while j >= 0 and arr[j] > key:
+            arr[j + 1] = arr[j]
+            j -= 1
+        arr[j + 1] = key
+    return arr
+
+def merge_sort(arr):
+    """
+    Merge sort implementation.
+    Time complexity: O(n log n)
+    """
+    if len(arr) <= 1:
+        return arr
+    
+    mid = len(arr) // 2
+    left = merge_sort(arr[:mid])
+    right = merge_sort(arr[mid:])
+    
+    return merge(left, right)
+
+def merge(left, right):
+    """Helper function for merge sort."""
+    result = []
+    i = j = 0
+    
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            result.append(left[i])
+            i += 1
+        else:
+            result.append(right[j])
+            j += 1
+    
+    result.extend(left[i:])
+    result.extend(right[j:])
+    return result
+
+def time_sort(sort_func, arr, iterations=100):
+    """
+    Time a sorting function with multiple iterations.
+    Returns average time in seconds.
+    """
+    total_time = 0
+    
+    for _ in range(iterations):
+        # Create a fresh copy for each iteration
+        test_arr = arr.copy()
+        
+        start = time.perf_counter()
+        sort_func(test_arr)
+        end = time.perf_counter()
+        
+        total_time += (end - start)
+    
+    return total_time / iterations
+
+def run_experiment():
+    """
+    Run the complete timing experiment comparing merge sort and insertion sort.
+    """
+    # Test ranges: dense for small n, sparse for large n
+    small_range = list(range(1, 101))  # 1 to 100
+    medium_range = list(range(110, 501, 10))  # 100 to 500, step 10
+    large_range = list(range(550, 2001, 50))  # 500 to 2000, step 50
+    
+    n_values = small_range + medium_range + large_range
+    
+    insertion_times = []
+    merge_times = []
+    
+    print("Running timing experiments...")
+    print(f"Testing {len(n_values)} different values of n")
+    
+    for i, n in enumerate(n_values):
+        # Generate random array
+        arr = [random.randint(1, 10000) for _ in range(n)]
+        
+        # Adjust iterations based on n to get meaningful measurements
+        if n < 50:
+            iterations = 1000
+        elif n < 200:
+            iterations = 500
+        elif n < 500:
+            iterations = 100
+        else:
+            iterations = 50
+        
+        # Time both algorithms
+        insertion_time = time_sort(insertion_sort, arr, iterations)
+        merge_time = time_sort(merge_sort, arr, iterations)
+        
+        insertion_times.append(insertion_time)
+        merge_times.append(merge_time)
+        
+        # Progress indicator
+        if (i + 1) % 20 == 0:
+            print(f"  Completed {i + 1}/{len(n_values)} tests")
+    
+    print("Experiments complete!")
+    return n_values, insertion_times, merge_times
+
+def find_crossover(n_values, insertion_times, merge_times):
+    """
+    Find the approximate crossover point where merge sort becomes faster.
+    """
+    for i in range(len(n_values)):
+        if merge_times[i] < insertion_times[i]:
+            if i > 0:
+                return n_values[i-1], n_values[i]
+            return n_values[0], n_values[i]
+    return None, None
+
+def plot_results(n_values, insertion_times, merge_times):
+    """
+    Create visualization of the timing results.
+    """
+    plt.figure(figsize=(12, 6))
+    
+    # Convert to milliseconds for better readability
+    insertion_ms = [t * 1000 for t in insertion_times]
+    merge_ms = [t * 1000 for t in merge_times]
+    
+    plt.plot(n_values, insertion_ms, 'b-', label='Insertion Sort', linewidth=2)
+    plt.plot(n_values, merge_ms, 'r-', label='Merge Sort', linewidth=2)
+    
+    # Find and mark crossover point
+    cross_low, cross_high = find_crossover(n_values, insertion_times, merge_times)
+    if cross_low and cross_high:
+        plt.axvspan(cross_low, cross_high, alpha=0.3, color='green', 
+                    label=f'Crossover region: n={cross_low}-{cross_high}')
+        plt.axvline(x=cross_low, color='green', linestyle='--', alpha=0.5)
+        plt.axvline(x=cross_high, color='green', linestyle='--', alpha=0.5)
+    
+    plt.xlabel('Input Size (n)', fontsize=12)
+    plt.ylabel('Average Time (milliseconds)', fontsize=12)
+    plt.title('Merge Sort vs Insertion Sort: Timing Comparison', fontsize=14, fontweight='bold')
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3)
+    
+    # Add zoomed inset for small n
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
+    axins = inset_axes(plt.gca(), width="40%", height="40%", loc='upper left',
+                       bbox_to_anchor=(0.55, 0.5, 0.4, 0.4), bbox_transform=plt.gca().transAxes)
+    
+    # Focus on small n values
+    zoom_limit = 150
+    zoom_indices = [i for i, n in enumerate(n_values) if n <= zoom_limit]
+    zoom_n = [n_values[i] for i in zoom_indices]
+    zoom_insertion = [insertion_ms[i] for i in zoom_indices]
+    zoom_merge = [merge_ms[i] for i in zoom_indices]
+    
+    axins.plot(zoom_n, zoom_insertion, 'b-', linewidth=2)
+    axins.plot(zoom_n, zoom_merge, 'r-', linewidth=2)
+    if cross_low and cross_high and cross_high <= zoom_limit:
+        axins.axvspan(cross_low, cross_high, alpha=0.3, color='green')
+    axins.set_xlabel('n', fontsize=9)
+    axins.set_ylabel('Time (ms)', fontsize=9)
+    axins.set_title('Detail: Small n', fontsize=10)
+    axins.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('sorting_comparison.png', dpi=300, bbox_inches='tight')
+    print("\nGraph saved as 'sorting_comparison.png'")
+    plt.show()
+    
+    return cross_low, cross_high
+
+def main():
+    """Main execution function."""
+    print("=" * 60)
+    print("MERGE SORT VS INSERTION SORT TIMING EXPERIMENT")
+    print("=" * 60)
+    
+    # Run the experiment
+    n_values, insertion_times, merge_times = run_experiment()
+    
+    # Create visualization
+    cross_low, cross_high = plot_results(n_values, insertion_times, merge_times)
+    
+    # Print summary statistics
+    print("\n" + "=" * 60)
+    print("RESULTS SUMMARY")
+    print("=" * 60)
+    
+    if cross_low and cross_high:
+        print(f"\nCrossover point: n = {cross_low} to {cross_high}")
+        print(f"  - For n < {cross_low}: Insertion sort is faster")
+        print(f"  - For n > {cross_high}: Merge sort is faster")
+    else:
+        print("\nNo clear crossover point found in tested range")
+    
+    # Sample specific values
+    sample_points = [10, 25, 50, 100, 500, 1000]
+    print("\nSample timing data:")
+    for sp in sample_points:
+        if sp in n_values:
+            idx = n_values.index(sp)
+            print(f"  n={sp:4d}: Insertion={insertion_times[idx]*1000:8.4f}ms, "
+                  f"Merge={merge_times[idx]*1000:8.4f}ms")
+
+if __name__ == "__main__":
+    main()
