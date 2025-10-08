@@ -1,0 +1,367 @@
+import time
+import random
+import matplotlib.pyplot as plt
+import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
+
+def insertion_sort(arr, left=0, right=None):
+    """
+    Insertion sort implementation that can sort a subarray.
+    Can be used standalone or as part of hybrid sort.
+    """
+    if right is None:
+        right = len(arr) - 1
+    
+    for i in range(left + 1, right + 1):
+        key = arr[i]
+        j = i - 1
+        while j >= left and arr[j] > key:
+            arr[j + 1] = arr[j]
+            j -= 1
+        arr[j + 1] = key
+    return arr
+
+def merge_sort(arr):
+    """Standard merge sort implementation."""
+    if len(arr) <= 1:
+        return arr
+    
+    mid = len(arr) // 2
+    left = merge_sort(arr[:mid])
+    right = merge_sort(arr[mid:])
+    
+    return merge(left, right)
+
+def merge(left, right):
+    """Helper function for merge sort."""
+    result = []
+    i = j = 0
+    
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            result.append(left[i])
+            i += 1
+        else:
+            result.append(right[j])
+            j += 1
+    
+    result.extend(left[i:])
+    result.extend(right[j:])
+    return result
+
+def hybrid_sort(arr, k=43):
+    """
+    Hybrid sorting algorithm combining merge sort and insertion sort.
+    Uses insertion sort for subarrays of size <= k, merge sort otherwise.
+    
+    Parameters:
+    - arr: array to sort
+    - k: threshold for switching to insertion sort
+    """
+    return _hybrid_sort_recursive(arr, k)
+
+def _hybrid_sort_recursive(arr, k):
+    """Recursive helper for hybrid sort."""
+    # Base case: use insertion sort for small arrays
+    if len(arr) <= k:
+        return insertion_sort(arr.copy())
+    
+    # Recursive case: use merge sort
+    if len(arr) <= 1:
+        return arr
+    
+    mid = len(arr) // 2
+    left = _hybrid_sort_recursive(arr[:mid], k)
+    right = _hybrid_sort_recursive(arr[mid:], k)
+    
+    return merge(left, right)
+
+def time_sort(sort_func, arr, iterations=100, **kwargs):
+    """
+    Time a sorting function with multiple iterations.
+    Returns average time in seconds.
+    """
+    total_time = 0
+    
+    for _ in range(iterations):
+        test_arr = arr.copy()
+        
+        start = time.perf_counter()
+        sort_func(test_arr, **kwargs)
+        end = time.perf_counter()
+        
+        total_time += (end - start)
+    
+    return total_time / iterations
+
+def find_optimal_k(n_values, k_range):
+    """
+    Find the optimal k value for each n by testing all k values.
+    Returns dictionary mapping n -> (optimal_k, best_time)
+    """
+    print(f"\nFinding optimal k for different values of n...")
+    print(f"Testing k values: {k_range}")
+    print(f"Testing n values: {n_values}")
+    
+    results = {}
+    
+    for n in n_values:
+        print(f"\n  Testing n = {n}:")
+        best_k = None
+        best_time = float('inf')
+        times_for_n = []
+        
+        # Generate test array once for this n
+        test_arr = [random.randint(1, 10000) for _ in range(n)]
+        
+        # Determine iterations based on n
+        if n < 100:
+            iterations = 500
+        elif n < 500:
+            iterations = 200
+        elif n < 1000:
+            iterations = 100
+        else:
+            iterations = 50
+        
+        for k in k_range:
+            avg_time = time_sort(hybrid_sort, test_arr, iterations, k=k)
+            times_for_n.append(avg_time)
+            
+            if avg_time < best_time:
+                best_time = avg_time
+                best_k = k
+            
+            if k % 10 == 0 or k == k_range[-1]:
+                print(f"    k={k:3d}: {avg_time*1000:7.4f}ms", end="")
+                if k == best_k:
+                    print(" <- best so far")
+                else:
+                    print()
+        
+        results[n] = {
+            'optimal_k': best_k,
+            'best_time': best_time,
+            'all_times': times_for_n
+        }
+        
+        print(f"  Optimal k for n={n}: k={best_k} (time: {best_time*1000:.4f}ms)")
+    
+    return results
+
+def compare_all_algorithms(n_values):
+    """
+    Compare insertion sort, merge sort, and hybrid sort across different n values.
+    Uses the optimal k found for each n.
+    """
+    print("\nComparing all three algorithms...")
+    
+    insertion_times = []
+    merge_times = []
+    hybrid_times = []
+    optimal_ks = []
+    
+    for n in n_values:
+        print(f"  Testing n = {n}...")
+        
+        # Generate test array
+        test_arr = [random.randint(1, 10000) for _ in range(n)]
+        
+        # Determine iterations
+        if n < 100:
+            iterations = 500
+        elif n < 500:
+            iterations = 200
+        elif n < 1000:
+            iterations = 100
+        else:
+            iterations = 50
+        
+        # Time insertion sort
+        insertion_time = time_sort(insertion_sort, test_arr, iterations)
+        insertion_times.append(insertion_time)
+        
+        # Time merge sort
+        merge_time = time_sort(merge_sort, test_arr, iterations)
+        merge_times.append(merge_time)
+        
+        # Find optimal k for this n (quick search)
+        k_test_range = list(range(5, 81, 5))
+        best_k = 43  # default
+        best_hybrid_time = float('inf')
+        
+        for k in k_test_range:
+            hybrid_time = time_sort(hybrid_sort, test_arr, iterations // 2, k=k)
+            if hybrid_time < best_hybrid_time:
+                best_hybrid_time = hybrid_time
+                best_k = k
+        
+        hybrid_times.append(best_hybrid_time)
+        optimal_ks.append(best_k)
+        
+        print(f"    Insertion: {insertion_time*1000:.4f}ms, "
+              f"Merge: {merge_time*1000:.4f}ms, "
+              f"Hybrid(k={best_k}): {best_hybrid_time*1000:.4f}ms")
+    
+    return insertion_times, merge_times, hybrid_times, optimal_ks
+
+def plot_k_optimization(k_range, n_values, results):
+    """
+    Create a visualization showing how performance varies with k for different n values.
+    """
+    plt.figure(figsize=(14, 6))
+    
+    # Plot 1: Performance vs k for different n values
+    plt.subplot(1, 2, 1)
+    colors = plt.cm.viridis(np.linspace(0, 1, len(n_values)))
+    
+    for i, n in enumerate(n_values):
+        times_ms = [t * 1000 for t in results[n]['all_times']]
+        plt.plot(k_range, times_ms, 'o-', color=colors[i], 
+                label=f'n={n}', linewidth=2, markersize=4)
+        
+        # Mark optimal k
+        optimal_k = results[n]['optimal_k']
+        optimal_idx = k_range.index(optimal_k)
+        optimal_time = times_ms[optimal_idx]
+        plt.plot(optimal_k, optimal_time, '*', color=colors[i], 
+                markersize=15, markeredgecolor='black', markeredgewidth=1)
+    
+    plt.xlabel('Threshold k', fontsize=12)
+    plt.ylabel('Average Time (milliseconds)', fontsize=12)
+    plt.title('Hybrid Sort Performance vs Threshold k', fontsize=14, fontweight='bold')
+    plt.legend(fontsize=9)
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 2: Optimal k vs n
+    plt.subplot(1, 2, 2)
+    optimal_k_values = [results[n]['optimal_k'] for n in n_values]
+    plt.plot(n_values, optimal_k_values, 'ro-', linewidth=2, markersize=8)
+    plt.xlabel('Input Size (n)', fontsize=12)
+    plt.ylabel('Optimal k', fontsize=12)
+    plt.title('Optimal Threshold k vs Input Size n', fontsize=14, fontweight='bold')
+    plt.grid(True, alpha=0.3)
+    
+    # Add horizontal line at k=43 (crossover from Q5)
+    plt.axhline(y=43, color='green', linestyle='--', linewidth=2, 
+                label='Q5 Crossover (k=43)', alpha=0.7)
+    plt.legend(fontsize=10)
+    
+    plt.tight_layout()
+    plt.savefig('k_optimization.png', dpi=300, bbox_inches='tight')
+    print("\nGraph saved as 'k_optimization.png'")
+    plt.show()
+
+def plot_algorithm_comparison(n_values, insertion_times, merge_times, 
+                              hybrid_times, optimal_ks):
+    """
+    Create a visualization comparing all three algorithms.
+    """
+    plt.figure(figsize=(12, 6))
+    
+    # Convert to milliseconds
+    insertion_ms = [t * 1000 for t in insertion_times]
+    merge_ms = [t * 1000 for t in merge_times]
+    hybrid_ms = [t * 1000 for t in hybrid_times]
+    
+    plt.plot(n_values, insertion_ms, 'b-', label='Insertion Sort', 
+            linewidth=2.5, marker='o', markersize=6)
+    plt.plot(n_values, merge_ms, 'r-', label='Merge Sort', 
+            linewidth=2.5, marker='s', markersize=6)
+    plt.plot(n_values, hybrid_ms, 'g-', label='Hybrid Sort (optimal k)', 
+            linewidth=2.5, marker='^', markersize=6)
+    
+    plt.xlabel('Input Size (n)', fontsize=12)
+    plt.ylabel('Average Time (milliseconds)', fontsize=12)
+    plt.title('Algorithm Comparison: Insertion vs Merge vs Hybrid Sort', 
+             fontsize=14, fontweight='bold')
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3)
+    
+    # Add text showing optimal k values at selected points
+    for i in range(0, len(n_values), max(1, len(n_values)//5)):
+        plt.annotate(f'k={optimal_ks[i]}', 
+                    xy=(n_values[i], hybrid_ms[i]),
+                    xytext=(10, -10), textcoords='offset points',
+                    fontsize=8, alpha=0.7)
+    
+    plt.tight_layout()
+    plt.savefig('algorithm_comparison.png', dpi=300, bbox_inches='tight')
+    print("Graph saved as 'algorithm_comparison.png'")
+    plt.show()
+
+def calculate_speedup(n_values, merge_times, hybrid_times):
+    """Calculate and display speedup of hybrid over pure merge sort."""
+    print("\n" + "="*60)
+    print("SPEEDUP ANALYSIS: Hybrid Sort vs Merge Sort")
+    print("="*60)
+    
+    for i, n in enumerate(n_values):
+        speedup = (merge_times[i] / hybrid_times[i] - 1) * 100
+        print(f"n={n:4d}: Hybrid is {speedup:5.2f}% faster than Merge Sort")
+
+def main():
+    """Main execution function."""
+    print("=" * 70)
+    print("HYBRID SORT (TIMSORT) OPTIMIZATION EXPERIMENT")
+    print("=" * 70)
+    
+    # Part 1: Find optimal k for different n values
+    print("\n" + "="*70)
+    print("PART 1: Finding Optimal k for Different Input Sizes")
+    print("="*70)
+    
+    n_test_values = [100, 500, 1000, 2000, 5000]
+    k_range = list(range(5, 81, 5))  # Test k from 5 to 80 in steps of 5
+    
+    k_optimization_results = find_optimal_k(n_test_values, k_range)
+    
+    # Visualize k optimization
+    plot_k_optimization(k_range, n_test_values, k_optimization_results)
+    
+    # Part 2: Compare all three algorithms
+    print("\n" + "="*70)
+    print("PART 2: Comparing All Three Algorithms")
+    print("="*70)
+    
+    comparison_n_values = list(range(100, 1001, 100)) + [1500, 2000, 3000, 5000]
+    
+    insertion_times, merge_times, hybrid_times, optimal_ks = \
+        compare_all_algorithms(comparison_n_values)
+    
+    # Visualize comparison
+    plot_algorithm_comparison(comparison_n_values, insertion_times, 
+                             merge_times, hybrid_times, optimal_ks)
+    
+    # Calculate speedup
+    calculate_speedup(comparison_n_values, merge_times, hybrid_times)
+    
+    # Summary
+    print("\n" + "="*70)
+    print("SUMMARY OF FINDINGS")
+    print("="*70)
+    
+    avg_optimal_k = np.mean([k_optimization_results[n]['optimal_k'] 
+                            for n in n_test_values])
+    print(f"\nAverage optimal k across all tested n values: {avg_optimal_k:.1f}")
+    print(f"Q5 crossover point (where Merge becomes faster): k ≈ 43")
+    
+    if 40 <= avg_optimal_k <= 50:
+        print("\n✓ The optimal k is CLOSE TO the Q5 crossover point.")
+    else:
+        print(f"\n✗ The optimal k ({avg_optimal_k:.1f}) DIFFERS from Q5 crossover (43).")
+    
+    print("\nOptimal k values by input size:")
+    for n in n_test_values:
+        opt_k = k_optimization_results[n]['optimal_k']
+        print(f"  n = {n:5d}: optimal k = {opt_k}")
+    
+    # Performance improvement
+    avg_speedup = np.mean([(merge_times[i] / hybrid_times[i] - 1) * 100 
+                          for i in range(len(comparison_n_values))])
+    print(f"\nAverage speedup of Hybrid over Merge Sort: {avg_speedup:.2f}%")
+    
+    print("\n" + "="*70)
+
+if __name__ == "__main__":
+    main()
